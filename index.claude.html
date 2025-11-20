@@ -181,6 +181,55 @@
         .trait-card-compact {
             padding: 1.25rem;
         }
+
+        .combined-score-card {
+            background: rgba(79, 70, 229, 0.06);
+            border: 1px solid rgba(129, 140, 248, 0.3);
+            border-radius: 0.75rem;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1rem;
+            color: #e5e7eb;
+        }
+
+        .combined-score-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            margin-bottom: 0.35rem;
+            color: #c7d2fe;
+        }
+
+        .combined-score-how {
+            font-size: 0.9rem;
+            color: #cbd5e1;
+            line-height: 1.4;
+            margin-bottom: 0.75rem;
+        }
+
+        .combined-score-weights {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .combined-score-weight-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            background: rgba(79, 70, 229, 0.08);
+            border-radius: 0.5rem;
+            padding: 0.65rem 0.75rem;
+            border: 1px solid rgba(99, 102, 241, 0.18);
+        }
+
+        .combined-score-weight-row .gene-name {
+            color: #e0e7ff;
+        }
+
+        .combined-score-meta {
+            font-size: 0.8rem;
+            color: #cbd5e1;
+        }
         .trait-header {
             display: flex;
             justify-content: space-between;
@@ -374,6 +423,7 @@
             border-radius: 0.25rem;
             margin-left: 0.5rem;
         }
+        .evidence-strong { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
         .evidence-high { background: rgba(16, 185, 129, 0.2); color: #10b981; }
         .evidence-moderate { background: rgba(251, 191, 36, 0.2); color: #fbbf24; }
         .evidence-low { background: rgba(249, 115, 22, 0.2); color: #f97316; }
@@ -885,12 +935,25 @@
             let found = 0;
 
             let weights = [];
+            let combinedScoreInfo = null;
             if (trait.combined_score_model?.score_weights?.length) {
                 weights = trait.combined_score_model.score_weights.map(w => ({
                     rsid: normalizeRsid(w.rsid),
                     weight: Number(w.weight ?? EVIDENCE_WEIGHT[w.evidence] ?? 0.7),
                     evidence: w.evidence ?? "moderate"
                 }));
+
+                combinedScoreInfo = {
+                    model: trait.combined_score_model.model || 'weighted_sum',
+                    howToUse: trait.combined_score_model.how_to_use || 'Kombinované skóre se počítá jako vážený součet SNP skóre podle uvedených vah.',
+                    weights: trait.combined_score_model.score_weights.map(w => ({
+                        rsid: normalizeRsid(w.rsid),
+                        displayRsid: w.rsid,
+                        weight: Number(w.weight ?? EVIDENCE_WEIGHT[w.evidence] ?? 0.7),
+                        evidence: w.evidence ?? trait.evidence ?? 'moderate',
+                        gene: snps[normalizeRsid(w.rsid)]?.gene || snps[w.rsid]?.gene || ''
+                    }))
+                };
             } else {
                 weights = Object.keys(snps).map(rsid => {
                     const ev = snps[rsid].evidence || trait.evidence || "moderate";
@@ -924,7 +987,10 @@
                         score: score,
                         description: allele?.description || "Genotyp v databázi nemá specifický popis.",
                         evidence: snpObj.evidence || trait.evidence || "moderate",
-                        isReverseComplement: allele?.isReverseComplement || false
+                        isReverseComplement: allele?.isReverseComplement || false,
+                        weight: w.weight,
+                        weightEvidence: w.evidence,
+                        partOfCombinedScore: Boolean(trait.combined_score_model?.score_weights?.length)
                     });
                 } else {
                     perSnp.push({
@@ -933,7 +999,10 @@
                         genotype: null,
                         score: null,
                         description: "SNP nebyl v nahraném souboru nalezen.",
-                        evidence: snpObj?.evidence || trait.evidence || "moderate"
+                        evidence: snpObj?.evidence || trait.evidence || "moderate",
+                        weight: w.weight,
+                        weightEvidence: w.evidence,
+                        partOfCombinedScore: Boolean(trait.combined_score_model?.score_weights?.length)
                     });
                 }
             }
@@ -955,7 +1024,8 @@
                 found,
                 total: weights.length,
                 perSnp,
-                overallScore
+                overallScore,
+                combinedScoreInfo
             };
         }
 
@@ -984,7 +1054,8 @@
                             coveragePercent: result.coveragePercent,
                             snps: result.perSnp,
                             recommendations: trait.recommendations,
-                            evidence: trait.evidence
+                            evidence: trait.evidence,
+                            combinedScoreInfo: result.combinedScoreInfo
                         };
                     }
 
@@ -994,16 +1065,17 @@
                             userResultsB[categoryId][traitId] = {
                                 name: trait.name,
                                 icon: trait.icon,
-                                score: resultB.overallScore,
-                                combinedPercent: resultB.combinedPercent,
-                                coveragePercent: resultB.coveragePercent,
-                                snps: resultB.perSnp,
-                                recommendations: trait.recommendations,
-                                evidence: trait.evidence
-                            };
-                        }
+                            score: resultB.overallScore,
+                            combinedPercent: resultB.combinedPercent,
+                            coveragePercent: resultB.coveragePercent,
+                            snps: resultB.perSnp,
+                            recommendations: trait.recommendations,
+                            evidence: trait.evidence,
+                            combinedScoreInfo: resultB.combinedScoreInfo
+                        };
                     }
                 }
+            }
             }
 
             document.getElementById('total-markers').textContent = userData.size.toLocaleString();
@@ -1113,11 +1185,17 @@
             };
 
             const evidenceLabels = {
-                'high': '🟢',
-                'moderate': '🟡',
-                'low': '🟠',
-                'emerging': '🔵'
+                'strong': '🟢 Silná',
+                'high': '🟢 Vysoká',
+                'moderate': '🟡 Střední',
+                'low': '🟠 Nízká',
+                'emerging': '🔵 Nově se objevující'
             };
+
+            const combinedScoreHtml = createCombinedScoreHtml(trait.combinedScoreInfo);
+            const evidenceKey = trait.evidence || 'moderate';
+            const evidenceLabel = evidenceLabels[evidenceKey] || evidenceLabels['moderate'];
+
 
             if (comparisonMode && traitB) {
                 // Comparison mode - side by side
@@ -1126,11 +1204,13 @@
                         <div class="trait-title">
                             <span style="font-size: 1.5rem;">${trait.icon}</span>
                             <span>${trait.name}</span>
-                            <span class="evidence-badge evidence-${trait.evidence || 'moderate'}">
-                                ${evidenceLabels[trait.evidence || 'moderate']} ${trait.evidence || 'moderate'}
+                            <span class="evidence-badge evidence-${evidenceKey}">
+                                ${evidenceLabel}
                             </span>
                         </div>
                     </div>
+
+                    ${combinedScoreHtml}
 
                     <div class="comparison-grid">
                         <div class="comparison-column">
@@ -1165,8 +1245,8 @@
                         <div class="trait-title">
                             <span style="font-size: 1.5rem;">${trait.icon}</span>
                             <span>${trait.name}</span>
-                            <span class="evidence-badge evidence-${trait.evidence || 'moderate'}">
-                                ${evidenceLabels[trait.evidence || 'moderate']} ${trait.evidence || 'moderate'}
+                            <span class="evidence-badge evidence-${evidenceKey}">
+                                ${evidenceLabel}
                             </span>
                         </div>
                         <div class="score-badge score-${trait.score}">
@@ -1174,6 +1254,8 @@
                             ${trait.combinedPercent !== null ? ` (${trait.combinedPercent}%)` : ''}
                         </div>
                     </div>
+
+                    ${combinedScoreHtml}
 
                     <div style="font-size: 0.875rem; color: #9ca3af; margin-bottom: 1rem;">
                         Pokrytí: ${trait.coveragePercent}% SNPs nalezeno
@@ -1196,6 +1278,32 @@
                 return `<a href="#snp-${normalized}" class="snp-link">${match}</a>`;
             });
         }
+      
+        function createCombinedScoreHtml(combinedScoreInfo) {
+            if (!combinedScoreInfo) return '';
+
+            const readableModel = combinedScoreInfo.model === 'weighted_sum'
+                ? 'vážený součet SNP skóre'
+                : combinedScoreInfo.model;
+
+            const weightRows = (combinedScoreInfo.weights || []).map(w => `
+                <div class="combined-score-weight-row">
+                    <div>
+                        <div class="gene-name">${w.gene ? `${w.gene} (${w.displayRsid || w.rsid})` : (w.displayRsid || w.rsid)}</div>
+                        <div class="combined-score-meta">Evidence: ${w.evidence}</div>
+                    </div>
+                    <div class="combined-score-meta">Váha: ${w.weight}</div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="combined-score-card">
+                    <div class="combined-score-header">🧮 Kombinované skóre (${readableModel})</div>
+                    <div class="combined-score-how">${combinedScoreInfo.howToUse}</div>
+                    <div class="combined-score-weights">${weightRows}</div>
+                </div>
+            `;
+        }
 
         function createSnpsHtml(snps) {
             let html = '';
@@ -1217,6 +1325,11 @@
                             <div style="color: #d1d5db; margin-top: 0.5rem;">
                                 ${descriptionHtml}
                             </div>
+                            ${snp.partOfCombinedScore && snp.weight !== undefined ? `
+                                <div class="combined-score-meta" style="margin-top: 0.35rem;">
+                                    Váha v kombinovaném skóre: ${snp.weight} (evidence: ${snp.weightEvidence || 'neuvedena'})
+                                </div>
+                            ` : ''}
                         </div>
                     `;
                 }
