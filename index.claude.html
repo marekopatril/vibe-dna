@@ -676,15 +676,15 @@
                         </div>
                         <div class="stat-item">
                             <span class="stat-value" id="searched-markers" style="background: linear-gradient(135deg, #4f46e5, #7c3aed); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">-</span>
-                            <span class="stat-label">Hledáno v databázi</span>
+                            <span class="stat-label">Markerů v databázi</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-value" id="found-markers" style="background: linear-gradient(135deg, #10b981, #059669); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">-</span>
-                            <span class="stat-label">Nalezeno</span>
+                            <span class="stat-label">Vysvětleno markerů</span>
                         </div>
                         <div class="stat-item">
                             <span class="stat-value" id="match-percent" style="background: linear-gradient(135deg, #10b981, #059669); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">-</span>
-                            <span class="stat-label">Shoda</span>
+                            <span class="stat-label">Celkem pokryto</span>
                         </div>
                     </div>
 
@@ -1473,63 +1473,20 @@
                     const strandIndicator = snp.isReverseComplement
                         ? '<span style="color: #a5b4fc; font-size: 0.75rem; margin-left: 0.5rem;" title="Genotyp byl automaticky převeden na opačnou orientaci DNA vlákna">🔄 RC</span>'
                         : '';
-                    const descriptionHtml = linkifyRsReferences(snp.description);
+                    let descriptionHtml = linkifyRsReferences(snp.description);
 
-                    const formatPercentage = (value) => {
-                        if (value === null || value === undefined) return null;
-                        if (typeof value === 'number') {
-                            const pct = value * 100;
-                            const digits = pct >= 10 ? 1 : 2;
-                            const formatted = pct.toFixed(digits).replace(/\.0+$/, '').replace(/(\.\d*[1-9])0+$/, '$1');
-                            return `${formatted} %`;
+                    if (snp.populationFrequency) {
+                        let searchKey = snp.genotype;
+                        if (snp.isReverseComplement) {
+                            searchKey = reverseComplement(snp.genotype);
                         }
-                        return String(value);
-                    };
-
-                    const populationInfo = snp.populationFrequency;
-                    const alleleEntries = populationInfo?.alleles ? Object.entries(populationInfo.alleles) : [];
-                    const genotypeEntries = populationInfo?.genotypes ? Object.entries(populationInfo.genotypes) : [];
-
-                    const alleleGrid = alleleEntries.length
-                        ? `
-                            <div class="population-section-title">Alelové četnosti (Evropa)</div>
-                            <div class="population-grid">
-                                ${alleleEntries.map(([allele, val]) => `
-                                    <div class="population-chip">
-                                        <span>${allele}</span>
-                                        <span>${formatPercentage(val)}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `
-                        : '';
-
-                    const genotypeGrid = genotypeEntries.length
-                        ? `
-                            <div class="population-section-title">Genotypy (Evropa)</div>
-                            <div class="population-grid">
-                                ${genotypeEntries.map(([genotype, val]) => `
-                                    <div class="population-chip ${snp.genotype === genotype ? 'highlight' : ''}">
-                                        <span>${genotype}</span>
-                                        <span>${formatPercentage(val)}</span>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `
-                        : '';
-
-                    const populationHtml = populationInfo && (alleleGrid || genotypeGrid || populationInfo.note)
-                        ? `
-                            <details class="population-details" style="margin-top: 0.5rem;">
-                                <summary style="cursor: pointer; color: #6b7280; font-size: 0.75rem; user-select: none;">🌍 Zastoupení v populaci</summary>
-                                <div class="population-frequency" style="margin-top: 0.5rem;">
-                                    ${alleleGrid}
-                                    ${genotypeGrid}
-                                    ${populationInfo.note ? `<div class="population-note">${populationInfo.note}</div>` : ''}
-                                </div>
-                            </details>
-                        `
-                        : '';
+                        const key = normalizeGenotype(searchKey);
+                        const freq = snp.populationFrequency[key];
+                        
+                        if (freq) {
+                            descriptionHtml += ` (Zastoupení v populaci ${freq})`;
+                        }
+                    }
 
                     html += `
                         <div class="snp-info" id="snp-${normalizeRsid(snp.rsid)}">
@@ -1545,8 +1502,6 @@
                                     ${descriptionHtml}
                                 </div>
                             </div>
-
-                            ${populationHtml}
                         </div>
                     `;
                 }
