@@ -391,6 +391,48 @@
         .hidden {
             display: none;
         }
+
+        .population-frequency {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            border: 1px solid #374151;
+            border-radius: 0.75rem;
+            background: linear-gradient(135deg, rgba(79, 70, 229, 0.05), rgba(17, 24, 39, 0.65));
+        }
+
+        .population-frequency h4 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.95rem;
+            color: #e5e7eb;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .population-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .population-chip {
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.65rem;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #f9fafb;
+            font-size: 0.9rem;
+        }
+
+        .population-note {
+            color: #9ca3af;
+            font-size: 0.85rem;
+            line-height: 1.4;
+        }
     </style>
 </head>
 <body class="text-gray-100">
@@ -552,6 +594,18 @@
         let userResults = {};
         let userResultsB = {};
         let comparisonMode = false;
+
+        const POPULATION_CONTEXT = {
+            rs174547: {
+                title: "Evropské zastoupení genotypů",
+                frequencies: [
+                    { genotype: "TT", value: "≈28 %" },
+                    { genotype: "CT", value: "≈56 %" },
+                    { genotype: "CC", value: "≈16 %" },
+                ],
+                note: "Četnosti z publikovaných evropských kohort; mohou se lišit podle konkrétní populace.",
+            },
+        };
 
         // Constants for scoring
         const SCORE_POINTS = {
@@ -1187,6 +1241,24 @@
                         ? '<span style="color: #a5b4fc; font-size: 0.75rem; margin-left: 0.5rem;" title="Genotyp byl automaticky převeden na opačnou orientaci DNA vlákna">🔄 RC</span>'
                         : '';
 
+                    const populationInfo = snp.rsid ? POPULATION_CONTEXT[snp.rsid.toLowerCase()] : null;
+                    const populationHtml = populationInfo
+                        ? `
+                            <div class="population-frequency">
+                                <h4>🌍 ${populationInfo.title}</h4>
+                                <div class="population-grid">
+                                    ${populationInfo.frequencies.map(freq => `
+                                        <div class="population-chip">
+                                            <span>${freq.genotype}</span>
+                                            <span>${freq.value}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                                <div class="population-note">${populationInfo.note}</div>
+                            </div>
+                        `
+                        : '';
+
                     html += `
                         <div class="snp-info">
                             <div class="snp-header">
@@ -1198,6 +1270,7 @@
                             <div style="color: #d1d5db; margin-top: 0.5rem;">
                                 ${snp.description}
                             </div>
+                            ${populationHtml}
                         </div>
                     `;
                 }
